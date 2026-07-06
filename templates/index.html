@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Registro y Login Facial</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <main class="layout">
+    <section class="panel camera-panel">
+      <h1>Registro y Autenticación Facial</h1>
+      <p class="subtitle">Streaming en vivo desde tu cámara, sin capturas manuales.</p>
+
+      <div class="video-shell">
+        <video id="camera" autoplay playsinline muted></video>
+        <div id="streamStatus" class="pill">Inicializando cámara...</div>
+      </div>
+    </section>
+
+    <section class="panel form-panel">
+      <div class="tabs">
+        <button id="tabRegister" class="tab active" type="button">Registrar</button>
+        <button id="tabAuth" class="tab" type="button">Autenticar</button>
+      </div>
+
+      <form id="registerForm" class="card">
+        <h2>Nuevo usuario</h2>
+        <label>Nombre</label>
+        <input id="nombre" name="nombre" placeholder="Nombre completo" required>
+
+        <label>Documento</label>
+        <input id="documento" name="documento" placeholder="Cédula o ID" required>
+
+        <button id="btnStartRegister" type="submit" class="primary">Iniciar registro por streaming</button>
+      </form>
+
+      <div id="authCard" class="card hidden">
+        <h2>Login facial</h2>
+        <p>Envía frames en vivo hasta encontrar coincidencia.</p>
+        <button id="btnStartAuth" type="button" class="primary">Iniciar autenticación</button>
+      </div>
+
+      <div id="result" class="result"></div>
+    </section>
+  </main>
+
+  <canvas id="buffer" class="hidden"></canvas>
+  <script src="/static/app.js"></script>
+</body>
+</html>
