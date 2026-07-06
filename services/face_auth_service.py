@@ -1,5 +1,7 @@
 import base64
+import binascii
 import hashlib
+import re
 
 import cv2
 import numpy as np
@@ -10,6 +12,8 @@ from services.recognizer import FaceRecognizer
 
 
 class FaceAuthService:
+
+    DOCUMENT_PATTERN = re.compile(r"^[A-Za-z0-9._-]{4,30}$")
 
     def __init__(self, similarity_threshold=0.45):
         self.recognizer = FaceRecognizer()
@@ -25,7 +29,14 @@ class FaceAuthService:
         else:
             encoded = data_url
 
-        image_bytes = base64.b64decode(encoded)
+        if len(encoded) > 8_000_000:
+            raise ValueError("El frame es demasiado grande.")
+
+        try:
+            image_bytes = base64.b64decode(encoded, validate=True)
+        except (ValueError, binascii.Error) as error:
+            raise ValueError("El frame no tiene un formato valido.") from error
+
         buffer = np.frombuffer(image_bytes, dtype=np.uint8)
         image = cv2.imdecode(buffer, cv2.IMREAD_COLOR)
 
@@ -65,6 +76,15 @@ class FaceAuthService:
         if not nombre or not documento:
             raise ValueError("Nombre y documento son obligatorios.")
 
+        nombre = nombre.strip()
+        documento = documento.strip()
+
+        if len(nombre) < 2 or len(nombre) > 100:
+            raise ValueError("Nombre invalido: debe tener entre 2 y 100 caracteres.")
+
+        if not self.DOCUMENT_PATTERN.match(documento):
+            raise ValueError("Identificacion invalida: usa 4-30 caracteres alfanumericos, punto, guion o guion bajo.")
+
         existing = User.query.filter_by(documento=documento).first()
         if existing:
             raise ValueError("Ya existe un usuario con ese documento.")
@@ -78,8 +98,8 @@ class FaceAuthService:
             raise ValueError("Este rostro ya está registrado en el sistema.")
 
         user = User(
-            nombre=nombre.strip(),
-            documento=documento.strip(),
+            nombre=nombre,
+            documento=documento,
             face_hash=face_hash,
             embedding=self.serialize_embedding(embedding)
         )

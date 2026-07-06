@@ -9,8 +9,9 @@
 <body>
   <main class="layout">
     <section class="panel camera-panel">
-      <h1>Registro y Autenticación Facial</h1>
-      <p class="subtitle">Streaming en vivo desde tu cámara, sin capturas manuales.</p>
+      <p class="eyebrow">Face Access Platform</p>
+      <h1>Registro y Autenticacion Biométrica</h1>
+      <p class="subtitle">Verificación de identidad en tiempo real mediante streaming seguro.</p>
 
       <div class="video-shell">
         <video id="camera" autoplay playsinline muted></video>
@@ -20,25 +21,25 @@
 
     <section class="panel form-panel">
       <div class="tabs">
-        <button id="tabRegister" class="tab active" type="button">Registrar</button>
-        <button id="tabAuth" class="tab" type="button">Autenticar</button>
+        <button id="tabRegister" class="tab active" type="button">Registro</button>
+        <button id="tabAuth" class="tab" type="button">Autenticación</button>
       </div>
 
       <form id="registerForm" class="card">
-        <h2>Nuevo usuario</h2>
-        <label>Nombre</label>
+        <h2>Alta de usuario</h2>
+        <label for="nombre">Nombre</label>
         <input id="nombre" name="nombre" placeholder="Nombre completo" required>
 
-        <label>Documento</label>
-        <input id="documento" name="documento" placeholder="Cédula o ID" required>
+        <label for="documento">Identificación</label>
+        <input id="documento" name="documento" placeholder="DNI, cédula o ID corporativo" required>
 
         <button id="btnStartRegister" type="submit" class="primary">Iniciar registro por streaming</button>
       </form>
 
       <div id="authCard" class="card hidden">
-        <h2>Login facial</h2>
-        <p>Envía frames en vivo hasta encontrar coincidencia.</p>
-        <button id="btnStartAuth" type="button" class="primary">Iniciar autenticación</button>
+        <h2>Acceso corporativo</h2>
+        <p>Validación facial continua hasta confirmar coincidencia.</p>
+        <button id="btnStartAuth" type="button" class="primary">Iniciar autenticacion</button>
       </div>
 
       <div id="result" class="result"></div>
@@ -46,6 +47,12 @@
   </main>
 
   <canvas id="buffer" class="hidden"></canvas>
+  <script>
+    window.__FACE_PLUGIN__ = {
+      pluginMode: {{ 'true' if plugin_context and plugin_context.get('plugin_mode') else 'false' }},
+      openerOrigin: "{{ plugin_context.get('opener_origin', '*') if plugin_context else '*' }}"
+    };
+  </script>
   <script src="/static/app.js"></script>
 </body>
 </html>

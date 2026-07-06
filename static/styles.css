@@ -1,12 +1,13 @@
 :root {
-  --bg-1: #f3f7ff;
-  --bg-2: #d9efff;
-  --ink: #0f172a;
-  --muted: #334155;
+  --bg-1: #f4f6f8;
+  --bg-2: #e7ecf2;
+  --ink: #1f2937;
+  --muted: #4b5563;
   --card: #ffffff;
-  --line: #bdd5ea;
-  --brand: #0057d8;
-  --brand-2: #00a3a3;
+  --line: #d1d9e3;
+  --brand: #0f3a64;
+  --brand-2: #1c5a94;
+  --brand-soft: #eff4fa;
   --ok: #137333;
   --bad: #b42318;
 }
@@ -17,9 +18,11 @@
 
 body {
   margin: 0;
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   color: var(--ink);
-  background: radial-gradient(circle at 20% 10%, #ffffff 0%, var(--bg-1) 45%, var(--bg-2) 100%);
+  background:
+    linear-gradient(145deg, rgba(15, 58, 100, 0.06) 0%, rgba(15, 58, 100, 0) 40%),
+    linear-gradient(180deg, var(--bg-1) 0%, var(--bg-2) 100%);
   min-height: 100vh;
 }
 
@@ -32,16 +35,26 @@ body {
 }
 
 .panel {
-  background: color-mix(in oklab, var(--card) 90%, #ffffff);
+  background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 20px;
-  padding: 20px;
-  box-shadow: 0 12px 30px rgba(0, 70, 140, 0.12);
+  border-radius: 16px;
+  padding: 22px;
+  box-shadow: 0 10px 26px rgba(20, 35, 60, 0.08);
+}
+
+.eyebrow {
+  margin: 0 0 8px 0;
+  color: var(--brand);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 h1 {
-  margin: 0;
-  font-size: 1.7rem;
+  margin: 0 0 6px 0;
+  font-size: 1.64rem;
+  letter-spacing: 0.01em;
 }
 
 .subtitle {
@@ -50,10 +63,10 @@ h1 {
 
 .video-shell {
   position: relative;
-  border-radius: 16px;
+  border-radius: 14px;
   overflow: hidden;
   border: 1px solid var(--line);
-  background: #02172a;
+  background: #0b1d2c;
 }
 
 video {
@@ -67,17 +80,18 @@ video {
   position: absolute;
   left: 12px;
   top: 12px;
-  background: rgba(2, 23, 42, 0.7);
+  background: rgba(13, 29, 44, 0.82);
   color: #fff;
   border-radius: 999px;
   padding: 8px 12px;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 .tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -86,10 +100,11 @@ video {
 .tab {
   border: 0;
   padding: 12px;
-  background: #edf4ff;
-  color: #234;
+  background: #f5f7fa;
+  color: #243447;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .tab.active {
@@ -99,30 +114,50 @@ video {
 
 .card {
   display: grid;
-  gap: 10px;
+  gap: 11px;
+  background: var(--brand-soft);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.card h2 {
+  margin: 0 0 4px 0;
+  font-size: 1.1rem;
 }
 
 label {
-  font-weight: 600;
+  font-weight: 700;
+  color: #2b3d52;
+  font-size: 0.92rem;
 }
 
 input {
   width: 100%;
-  padding: 12px;
-  border-radius: 12px;
-  border: 1px solid #a8bfd6;
-  font-size: 1rem;
+  padding: 12px 13px;
+  border-radius: 10px;
+  border: 1px solid #bcc8d7;
+  font-size: 0.98rem;
+  background: #fff;
+  color: var(--ink);
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--brand-2);
+  box-shadow: 0 0 0 3px rgba(28, 90, 148, 0.12);
 }
 
 button.primary {
   border: 0;
-  background: linear-gradient(120deg, var(--brand), var(--brand-2));
+  background: linear-gradient(120deg, #123e69, #1f619c);
   color: #fff;
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 12px 14px;
-  font-size: 0.96rem;
+  font-size: 0.92rem;
   font-weight: 700;
   cursor: pointer;
+  letter-spacing: 0.01em;
 }
 
 button.primary:disabled {
@@ -132,12 +167,13 @@ button.primary:disabled {
 
 .result {
   margin-top: 14px;
-  border: 1px dashed #b8ccdf;
+  border: 1px dashed #bfd0e1;
   border-radius: 12px;
   padding: 12px;
   min-height: 64px;
-  background: #f7fbff;
+  background: #f6f9fc;
   white-space: pre-wrap;
+  font-size: 0.93rem;
 }
 
 .result.ok {

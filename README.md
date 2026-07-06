@@ -6,79 +6,208 @@ Este proyecto usa Flask + InsightFace para registrar usuarios y autenticarlos po
 
 - macOS
 - Python 3.9+
+- Docker Desktop (para PostgreSQL y despliegue por Compose)
 - Camara web habilitada
 
-## 1. Entrar al proyecto
+## Variables de entorno
+
+1. Copia el archivo de ejemplo:
+
+```bash
+cp .env.example .env
+```
+
+2. Edita credenciales si lo necesitas:
+
+```env
+DB_ENGINE=postgres
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=ocr
+DB_USER=ocr_user
+DB_PASSWORD=ocr_password
+```
+
+Nota: Si defines DATABASE_URL, esa variable tiene prioridad sobre DB_ENGINE y DB_*. 
+
+## Opcion A: Ejecutar con Docker Compose (recomendado)
+
+Desde la carpeta del proyecto:
+
+```bash
+docker compose --env-file .env up -d --build
+```
+
+Para ver logs:
+
+```bash
+docker compose logs -f web
+```
+
+Aplicacion:
+
+- http://127.0.0.1:5000
+
+Detener servicios:
+
+```bash
+docker compose down
+```
+
+Detener y borrar volumen de PostgreSQL:
+
+```bash
+docker compose down -v
+```
+
+## Opcion B: Ejecutar local con entorno virtual + PostgreSQL
+
+### 1. Entrar al proyecto
 
 ```bash
 cd /Users/areamovil/Desktop/ocr
 ```
 
-## 2. Crear entorno virtual
+### 2. Crear entorno virtual
 
 ```bash
 python3 -m venv venv
 ```
 
-## 3. Activar entorno virtual
+### 3. Activar entorno virtual
 
 ```bash
 source venv/bin/activate
 ```
 
-Cuando este activo, veras `(venv)` al inicio de la terminal.
-
-## 4. Actualizar pip (recomendado)
+### 4. Instalar dependencias
 
 ```bash
 python -m pip install --upgrade pip
-```
-
-## 5. Instalar dependencias
-
-```bash
 pip install -r requirements.txt
 ```
 
-## 6. Ejecutar el proyecto
+### 5. Exportar variables de entorno
+
+```bash
+export DB_ENGINE=postgres
+export DB_HOST=localhost
+export DB_PORT=5432
+export DB_NAME=ocr
+export DB_USER=ocr_user
+export DB_PASSWORD=ocr_password
+```
+
+### 6. Ejecutar la aplicacion
 
 ```bash
 python app.py
 ```
 
-La aplicacion quedara disponible en:
+Aplicacion:
 
 - http://127.0.0.1:5000
 
-## 7. Uso basico
+## Uso basico
 
-1. Abre el navegador en http://127.0.0.1:5000
+1. Abre http://127.0.0.1:5000
 2. Permite acceso a la camara
-3. En la pestaña Registrar:
-   - Ingresa nombre y documento
-   - Pulsa "Iniciar registro por streaming"
-4. En la pestaña Autenticar:
-   - Pulsa "Iniciar autenticacion"
+3. En Registrar:
+    - Ingresa nombre y documento
+    - Pulsa Iniciar registro por streaming
+4. En Autenticar:
+    - Pulsa Iniciar autenticacion
 
-## 8. Desactivar entorno virtual
+## Plugin popup para otra aplicacion
 
-Cuando termines:
+El proyecto incluye un SDK frontend para abrir el plugin en una ventana y recibir la autenticacion.
 
-```bash
-deactivate
+Archivo SDK:
+
+- /static/face-auth-plugin.js
+
+### Seguridad del plugin (obligatoria)
+
+Para evitar que cualquier aplicacion use el plugin, ahora el modo plugin exige token de lanzamiento firmado y con expiracion.
+
+Configura clientes autorizados en variables de entorno:
+
+```env
+PLUGIN_SECURITY_ENABLED=1
+PLUGIN_TOKEN_TTL_SECONDS=120
+PLUGIN_CLIENTS=erp_portal:erp-secret-key
 ```
 
-## Solucion de problemas comunes
+Flujo seguro:
 
-### Error: command not found: python
-Usa siempre `python3` para crear el entorno virtual y `python` despues de activar `venv`.
+1. Tu backend pide token a POST /api/plugin/token enviando client_id, origin y header X-Plugin-Api-Key.
+2. El backend de plugin responde token temporal.
+3. Tu frontend abre popup con FaceAuthPlugin.open usando launchToken.
+4. El plugin valida token y solo envia resultados al origin incluido en ese token.
+
+### Integracion minima en otra app web
+
+Primero, tu backend debe pedir el token (ejemplo pseudo-codigo):
+
+```js
+// Backend de tu aplicacion, no en browser.
+const response = await fetch("http://127.0.0.1:5000/api/plugin/token", {
+   method: "POST",
+   headers: {
+      "Content-Type": "application/json",
+      "X-Plugin-Api-Key": process.env.FACE_PLUGIN_API_KEY
+   },
+   body: JSON.stringify({
+      client_id: "erp_portal",
+      origin: "https://tu-app.com"
+   })
+});
+
+const { data } = await response.json();
+return data.token;
+```
+
+Luego, en frontend, abres el popup con ese token:
+
+```html
+<script src="http://127.0.0.1:5000/static/face-auth-plugin.js"></script>
+<button id="btnFaceLogin">Login facial</button>
+
+<script>
+   document.getElementById("btnFaceLogin").addEventListener("click", async () => {
+      try {
+         // launchToken llega desde tu backend (nunca hardcodear api keys en frontend)
+         const launchToken = await fetch("/api/mi-backend/plugin-launch-token").then(r => r.text());
+
+         const result = await window.FaceAuthPlugin.open({
+            pluginUrl: "http://127.0.0.1:5000/",
+            launchToken,
+            expectedOrigin: "http://127.0.0.1:5000"
+         });
+
+         console.log("Usuario autenticado:", result.user);
+      } catch (error) {
+         console.error("No se pudo autenticar:", error.message);
+      }
+   });
+</script>
+```
+
+Como funciona:
+
+1. Tu app abre un popup con el plugin.
+2. El usuario se autentica por rostro en el popup.
+3. El plugin valida token y origen permitido.
+4. El plugin envia el resultado a la ventana padre con postMessage.
+5. El SDK resuelve la promesa con los datos del usuario autenticado.
+
+## Solucion de problemas
+
+### command not found: python
+Usa python3 para crear el entorno virtual y python despues de activarlo.
 
 ### InsightFace no detecta GPU
-El proyecto ya tiene fallback automatico a CPU. Puede ser mas lento, pero funciona.
+El proyecto tiene fallback automatico a CPU.
 
-### Puerto ocupado
-Si el puerto 5000 esta en uso, cierra el proceso anterior o cambia el puerto en `app.py`:
-
-```python
-app.run(debug=True, port=5001)
-```
+### Puerto 5000 ocupado
+Cambia APP_PORT por variable de entorno o libera el puerto.

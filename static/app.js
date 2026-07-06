@@ -11,10 +11,29 @@ const tabAuth = document.getElementById("tabAuth");
 const btnStartAuth = document.getElementById("btnStartAuth");
 const btnStartRegister = document.getElementById("btnStartRegister");
 
+const pluginConfig = window.__FACE_PLUGIN__ || {};
+const pluginMode = pluginConfig.pluginMode === true;
+const openerOrigin = pluginConfig.openerOrigin || "*";
+
 let stream = null;
 let activeMode = "register";
 let loopTimer = null;
 let requestInFlight = false;
+
+function notifyPluginHost(eventName, payload) {
+  if (!pluginMode || !window.opener) {
+    return;
+  }
+
+  window.opener.postMessage(
+    {
+      source: "face-auth-plugin",
+      event: eventName,
+      payload
+    },
+    openerOrigin
+  );
+}
 
 function setResult(message, kind = "") {
   resultBox.textContent = message;
@@ -144,6 +163,7 @@ registerForm.addEventListener("submit", (event) => {
         `Registro exitoso\nNombre: ${data.nombre}\nDocumento: ${data.documento}\nHash: ${data.face_hash}`,
         "ok"
       );
+      notifyPluginHost("register:success", data);
       btnStartRegister.disabled = false;
     }
   );
@@ -161,6 +181,14 @@ btnStartAuth.addEventListener("click", () => {
         `Autenticación correcta\nNombre: ${user.nombre}\nDocumento: ${user.documento}\nHash: ${user.face_hash}\nScore: ${data.score} (umbral ${data.threshold})`,
         "ok"
       );
+      notifyPluginHost("auth:success", data);
+
+      if (pluginMode) {
+        setTimeout(() => {
+          window.close();
+        }, 800);
+      }
+
       btnStartAuth.disabled = false;
     }
   );

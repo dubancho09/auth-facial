@@ -1,2 +1,13 @@
 venv/
 .venv
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.DS_Store
+.env
+.env.*
+!.env.example
+instance/*.db
+postgres_data/
