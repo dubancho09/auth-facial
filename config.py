@@ -46,5 +46,6 @@ class Config:
 
     RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
     RATE_LIMIT_TOKEN_PER_WINDOW = int(os.getenv("RATE_LIMIT_TOKEN_PER_WINDOW", "20"))
-    RATE_LIMIT_REGISTER_PER_WINDOW = int(os.getenv("RATE_LIMIT_REGISTER_PER_WINDOW", "10"))
+    # Register uses streaming frames and needs a higher default burst allowance.
+    RATE_LIMIT_REGISTER_PER_WINDOW = int(os.getenv("RATE_LIMIT_REGISTER_PER_WINDOW", "90"))
     RATE_LIMIT_AUTH_PER_WINDOW = int(os.getenv("RATE_LIMIT_AUTH_PER_WINDOW", "180"))

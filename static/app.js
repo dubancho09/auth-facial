@@ -19,6 +19,7 @@ let stream = null;
 let activeMode = "register";
 let loopTimer = null;
 let requestInFlight = false;
+let rateLimitedUntil = 0;
 
 function notifyPluginHost(eventName, payload) {
   if (!pluginMode || !window.opener) {
@@ -89,8 +90,12 @@ function captureFrameDataURL() {
   return canvas.toDataURL("image/jpeg", 0.82);
 }
 
-async function sendFrame(endpoint, payloadBuilder, onSuccess) {
+async function sendFrame(endpoint, payloadBuilder, onSuccess, shouldStopOnError) {
   if (requestInFlight) {
+    return;
+  }
+
+  if (Date.now() < rateLimitedUntil) {
     return;
   }
 
@@ -116,8 +121,24 @@ async function sendFrame(endpoint, payloadBuilder, onSuccess) {
       return;
     }
 
+    if (response.status === 429) {
+      const retryAfterSeconds = Number(response.headers.get("Retry-After") || "1");
+      rateLimitedUntil = Date.now() + Math.max(1, retryAfterSeconds) * 1000;
+      setResult(
+        `Demasiadas solicitudes. Reintentando en ${Math.max(1, retryAfterSeconds)}s...`,
+        "bad"
+      );
+      return;
+    }
+
     const err = body.error || body.data?.message || "No se pudo procesar el rostro.";
     setResult(err, "bad");
+
+    if (typeof shouldStopOnError === "function" && shouldStopOnError(response, body)) {
+      stopLoop();
+      btnStartRegister.disabled = false;
+      btnStartAuth.disabled = false;
+    }
   } catch (error) {
     setResult(`Error de conexión: ${error.message}`, "bad");
   } finally {
@@ -125,13 +146,14 @@ async function sendFrame(endpoint, payloadBuilder, onSuccess) {
   }
 }
 
-function startLoop(endpoint, payloadBuilder, onSuccess) {
+function startLoop(endpoint, payloadBuilder, onSuccess, shouldStopOnError = null) {
   stopLoop();
+  rateLimitedUntil = 0;
 
   setResult("Procesando stream en vivo... mantente frente a la cámara.");
 
   loopTimer = setInterval(() => {
-    sendFrame(endpoint, payloadBuilder, onSuccess);
+    sendFrame(endpoint, payloadBuilder, onSuccess, shouldStopOnError);
   }, 850);
 }
 
@@ -165,7 +187,8 @@ registerForm.addEventListener("submit", (event) => {
       );
       notifyPluginHost("register:success", data);
       btnStartRegister.disabled = false;
-    }
+    },
+    (response) => response.status === 400
   );
 });
 
