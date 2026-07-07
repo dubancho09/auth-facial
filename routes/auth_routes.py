@@ -1,4 +1,5 @@
 import hmac
+import os
 from urllib.parse import urlparse
 
 from flask import Blueprint, current_app, jsonify, render_template, request
@@ -9,7 +10,9 @@ from services.rate_limiter import InMemoryRateLimiter
 
 
 auth_bp = Blueprint("auth", __name__)
-face_auth_service = FaceAuthService()
+face_auth_service = FaceAuthService(
+    duplicate_face_threshold=float(os.getenv("DUPLICATE_FACE_THRESHOLD", "0.92"))
+)
 rate_limiter = InMemoryRateLimiter()
 
 

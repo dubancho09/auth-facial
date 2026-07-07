@@ -5,6 +5,7 @@ import re
 
 import cv2
 import numpy as np
+from sqlalchemy.exc import IntegrityError
 
 from database import db
 from models import LoginHistory, User
@@ -15,9 +16,10 @@ class FaceAuthService:
 
     DOCUMENT_PATTERN = re.compile(r"^[A-Za-z0-9._-]{4,30}$")
 
-    def __init__(self, similarity_threshold=0.45):
+    def __init__(self, similarity_threshold=0.45, duplicate_face_threshold=0.92):
         self.recognizer = FaceRecognizer()
         self.similarity_threshold = similarity_threshold
+        self.duplicate_face_threshold = duplicate_face_threshold
 
     @staticmethod
     def decode_frame(data_url):
@@ -91,11 +93,21 @@ class FaceAuthService:
 
         image = self.decode_frame(frame_data)
         embedding = self.recognizer.get_embedding(image)
+        normalized_probe = self._normalize_embedding(embedding)
 
         face_hash = self.build_face_hash(embedding)
 
         if User.query.filter_by(face_hash=face_hash).first():
             raise ValueError("Este rostro ya está registrado en el sistema.")
+
+        # Defend against near-duplicate embeddings caused by small camera/noise changes.
+        existing_users = User.query.with_entities(User.id, User.embedding).all()
+        for _, stored_blob in existing_users:
+            stored_embedding = self._normalize_embedding(self.deserialize_embedding(stored_blob))
+            score = float(np.dot(normalized_probe, stored_embedding))
+
+            if score >= self.duplicate_face_threshold:
+                raise ValueError("Este rostro ya está registrado en el sistema.")
 
         user = User(
             nombre=nombre,
@@ -105,7 +117,20 @@ class FaceAuthService:
         )
 
         db.session.add(user)
-        db.session.commit()
+
+        try:
+            db.session.commit()
+        except IntegrityError as error:
+            db.session.rollback()
+
+            message = str(getattr(error, "orig", error)).lower()
+            if "face_hash" in message or "users_face_hash" in message or "unique" in message:
+                raise ValueError("Este rostro ya está registrado en el sistema.") from error
+
+            if "documento" in message:
+                raise ValueError("Ya existe un usuario con esa identificacion.") from error
+
+            raise
 
         return {
             "id": user.id,
