@@ -92,6 +92,15 @@ class FaceAuthService:
             raise ValueError("Ya existe un usuario con ese documento.")
 
         image = self.decode_frame(frame_data)
+
+        is_valid_face, warnings = self.recognizer.validate_unobstructed_face(image)
+        if not is_valid_face:
+            details = " ".join(warnings)
+            raise ValueError(
+                "Advertencia: no se puede registrar el rostro con gafas, cubrebocas o zonas faciales ocultas. "
+                f"{details}".strip()
+            )
+
         embedding = self.recognizer.get_embedding(image)
         normalized_probe = self._normalize_embedding(embedding)
 

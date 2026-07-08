@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin Login | OCR</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    .auth-wrap {
+      width: min(480px, 92vw);
+      margin: 48px auto;
+    }
+  </style>
+</head>
+<body>
+  <main class="auth-wrap panel">
+    <p class="eyebrow">Panel Administrador</p>
+    <h1>Ingreso por API key</h1>
+    <p class="subtitle">Escribe tu API key para acceder al CRUD de usuarios.</p>
+
+    <form method="post" action="/admin/login" class="card">
+      <label for="api_key">API key</label>
+      <input id="api_key" name="api_key" type="password" required placeholder="sk-admin-...">
+      <button type="submit" class="primary">Entrar</button>
+    </form>
+
+    {% if error %}
+      <div class="result bad" style="margin-top: 12px;">{{ error }}</div>
+    {% endif %}
+  </main>
+</body>
+</html>

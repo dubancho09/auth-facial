@@ -7,6 +7,7 @@ from config import Config
 from database import db
 import models  # Importa los modelos para que SQLAlchemy los registre
 from routes.auth_routes import auth_bp
+from routes.admin_routes import admin_bp
 
 app = Flask(__name__)
 
@@ -14,6 +15,7 @@ app.config.from_object(Config)
 
 db.init_app(app)
 app.register_blueprint(auth_bp)
+app.register_blueprint(admin_bp)
 
 
 @app.after_request

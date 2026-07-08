@@ -2,7 +2,7 @@ import hmac
 import os
 from urllib.parse import urlparse
 
-from flask import Blueprint, current_app, jsonify, render_template, request
+from flask import Blueprint, current_app, jsonify, redirect, render_template, request, session, url_for
 
 from services.face_auth_service import FaceAuthService
 from services.plugin_security_service import PluginSecurityService
@@ -117,6 +117,12 @@ def _resolve_plugin_context():
 
 @auth_bp.get("/")
 def index():
+    # Protect direct access to root UI behind admin API-key login.
+    # Plugin popup flow keeps using signed token validation and does not require admin session.
+    is_plugin_mode = request.args.get("plugin") == "1"
+    if not is_plugin_mode and session.get("admin_authenticated") is not True:
+        return redirect(url_for("admin.login"))
+
     try:
         plugin_context = _resolve_plugin_context()
         return render_template("index.html", plugin_context=plugin_context)

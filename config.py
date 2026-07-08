@@ -1,6 +1,10 @@
 import os
 from urllib.parse import quote_plus
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 
@@ -43,6 +47,7 @@ class Config:
 
     SECURITY_HEADERS_ENABLED = os.getenv("SECURITY_HEADERS_ENABLED", "1") == "1"
     REGISTER_API_KEY = os.getenv("REGISTER_API_KEY", "")
+    ADMIN_PANEL_API_KEY = os.getenv("ADMIN_PANEL_API_KEY", "")
 
     RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
     RATE_LIMIT_TOKEN_PER_WINDOW = int(os.getenv("RATE_LIMIT_TOKEN_PER_WINDOW", "20"))

@@ -118,6 +118,31 @@ Aplicacion:
 4. En Autenticar:
     - Pulsa Iniciar autenticacion
 
+## Panel admin con login por API key
+
+El sistema incluye un panel para gestionar usuarios con CRUD (crear, listar, editar, eliminar), protegido por login de API key en sesion.
+
+### 1. Configurar API key de administrador
+
+En tu `.env` agrega:
+
+```env
+ADMIN_PANEL_API_KEY=tu-api-key-admin-segura
+```
+
+### 2. Abrir login de panel
+
+- http://127.0.0.1:5000/admin/login
+
+### 3. Funcionalidades del panel
+
+- Crear usuario: captura frame facial desde camara + nombre + documento.
+- Listar usuarios registrados.
+- Editar nombre y documento.
+- Eliminar usuario.
+
+Nota: El alta desde panel reutiliza la misma validacion biometrica del registro facial principal.
+
 ## Plugin popup para otra aplicacion
 
 El proyecto incluye un SDK frontend para abrir el plugin en una ventana y recibir la autenticacion.

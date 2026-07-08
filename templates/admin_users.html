@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Panel Usuarios | OCR</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    .admin-layout {
+      width: min(1280px, 95vw);
+      margin: 24px auto;
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      gap: 20px;
+    }
+
+    .admin-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      gap: 10px;
+    }
+
+    .admin-top form {
+      margin: 0;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 700px;
+    }
+
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #e2e8f0;
+      text-align: left;
+      font-size: 0.92rem;
+      vertical-align: top;
+    }
+
+    th {
+      color: #23405d;
+      background: #f8fafc;
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      border: 1px solid #aab7c9;
+      background: #fff;
+      color: #163652;
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .btn.danger {
+      border-color: #d0a39d;
+      color: #8e2015;
+    }
+
+    .video-shell video {
+      min-height: 270px;
+    }
+
+    .camera-toolbar {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      margin-bottom: 10px;
+    }
+
+    .camera-off {
+      opacity: 0.45;
+      filter: grayscale(1);
+    }
+
+    .auth-block {
+      margin-top: 14px;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 14px;
+    }
+
+    .auth-result {
+      margin-top: 10px;
+      min-height: 22px;
+    }
+
+    @media (max-width: 980px) {
+      .admin-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="admin-layout">
+    <section class="panel">
+      <div class="admin-top">
+        <div>
+          <p class="eyebrow">Administracion</p>
+          <h1>CRUD de usuarios</h1>
+          <p class="subtitle">Alta biometrica, edicion y eliminacion de usuarios.</p>
+        </div>
+        <form method="post" action="/admin/logout">
+          <button class="btn" type="submit">Cerrar sesion</button>
+        </form>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nombre</th>
+              <th>Documento</th>
+              <th>Face Hash</th>
+              <th>Creado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="usersBody"></tbody>
+        </table>
+      </div>
+
+      <div id="usersResult" class="result" style="margin-top: 14px;">Cargando usuarios...</div>
+    </section>
+
+    <section class="panel">
+      <p class="eyebrow">Crear Usuario</p>
+      <h2 style="margin-top: 0;">Registro facial desde panel</h2>
+      <p class="subtitle">Captura un frame desde camara y crea el usuario.</p>
+      <div class="result bad" style="margin-bottom: 10px;">
+        Advertencia: para registrar un usuario, el rostro debe estar descubierto (sin gafas oscuras ni cubrebocas).
+      </div>
+
+      <div class="video-shell" style="margin-bottom: 12px;">
+        <video id="camera" autoplay playsinline muted></video>
+        <div id="streamStatus" class="pill">Inicializando camara...</div>
+      </div>
+
+      <div class="camera-toolbar">
+        <button id="btnToggleCamera" class="btn" type="button">Apagar camara</button>
+      </div>
+
+      <form id="createUserForm" class="card">
+        <label for="nombre">Nombre</label>
+        <input id="nombre" name="nombre" required>
+
+        <label for="documento">Identificacion</label>
+        <input id="documento" name="documento" required>
+
+        <button id="btnCreate" class="primary" type="submit">Capturar y crear usuario</button>
+      </form>
+
+      <div class="auth-block">
+        <p class="eyebrow" style="margin: 0 0 6px 0;">Autenticar</p>
+        <h3 style="margin: 0 0 8px 0;">Validacion facial</h3>
+        <p class="subtitle" style="margin-bottom: 8px;">Compara el rostro actual contra los usuarios registrados.</p>
+        <button id="btnAuthenticate" class="btn" type="button">Autenticar ahora</button>
+        <div id="authResult" class="result auth-result">Listo para autenticar.</div>
+      </div>
+
+      <canvas id="buffer" class="hidden"></canvas>
+    </section>
+  </main>
+
+  <script src="/static/admin.js"></script>
+</body>
+</html>
