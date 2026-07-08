@@ -6,6 +6,7 @@ from flask import Blueprint, current_app, jsonify, redirect, render_template, re
 
 from database import db
 from models import LoginHistory, User
+from services.api_key_service import ApiKeyService
 from services.face_auth_service import FaceAuthService
 
 
@@ -13,6 +14,7 @@ admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 face_auth_service = FaceAuthService(
     duplicate_face_threshold=float(os.getenv("DUPLICATE_FACE_THRESHOLD", "0.92"))
 )
+api_key_service = ApiKeyService()
 
 _DOCUMENT_PATTERN = re.compile(r"^[A-Za-z0-9._-]{4,30}$")
 
@@ -33,6 +35,11 @@ def _require_admin_session():
 
 def _error_response(message, status_code):
     return jsonify({"ok": False, "error": message}), status_code
+
+
+def _remote_ip():
+    forwarded = request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+    return forwarded or (request.remote_addr or "unknown")
 
 
 def _validate_admin_payload(nombre, documento):
@@ -75,17 +82,32 @@ def login():
 @admin_bp.post("/login")
 def login_submit():
     provided_key = (request.form.get("api_key") or "").strip()
-    expected_key = current_app.config.get("ADMIN_PANEL_API_KEY", "")
 
-    if not expected_key:
-        return render_template(
-            "admin_login.html",
-            error="ADMIN_PANEL_API_KEY no esta configurada en el servidor."
-        ), 500
+    if not provided_key:
+        return render_template("admin_login.html", error="Debes ingresar una API key."), 400
 
-    if not hmac.compare_digest(provided_key, expected_key):
-        return render_template("admin_login.html", error="API key invalida."), 401
+    validated_key, validation_error = api_key_service.verify_key(
+        raw_key=provided_key,
+        required_scopes=["admin:login"],
+        remote_ip=_remote_ip()
+    )
 
+    if validated_key is None:
+        expected_key = current_app.config.get("ADMIN_PANEL_API_KEY", "")
+
+        if not expected_key:
+            return render_template(
+                "admin_login.html",
+                error=(
+                    "No hay API keys activas para admin. "
+                    "Configura ADMIN_PANEL_API_KEY temporalmente o crea una API key desde backend."
+                )
+            ), 500
+
+        if not hmac.compare_digest(provided_key, expected_key):
+            return render_template("admin_login.html", error="API key invalida."), 401
+
+    session["admin_api_key_id"] = validated_key.id if validated_key else None
     session["admin_authenticated"] = True
     return redirect(url_for("admin.users_panel"))
 
@@ -99,6 +121,65 @@ def logout():
 @admin_bp.get("/users")
 def users_panel():
     return render_template("admin_users.html")
+
+
+@admin_bp.get("/api/apikeys")
+def list_api_keys():
+    return jsonify({"ok": True, "data": api_key_service.list_keys()})
+
+
+@admin_bp.post("/api/apikeys")
+def create_api_key():
+    if not request.is_json:
+        return _error_response("Se requiere Content-Type application/json.", 400)
+
+    payload = request.get_json(silent=True) or {}
+
+    try:
+        api_key, raw_key = api_key_service.create_key(
+            name=payload.get("name", ""),
+            scopes=payload.get("scopes", []),
+            expires_in_days=payload.get("expires_in_days"),
+            client_id=payload.get("client_id")
+        )
+    except ValueError as error:
+        return _error_response(str(error), 400)
+    except Exception:
+        current_app.logger.exception("Error interno en /admin/api/apikeys")
+        return _error_response("Error interno del servidor.", 500)
+
+    return jsonify({
+        "ok": True,
+        "data": {
+            "id": api_key.id,
+            "name": api_key.name,
+            "key_prefix": api_key.key_prefix,
+            "scopes": api_key.scopes.split(",") if api_key.scopes else [],
+            "client_id": api_key.client_id,
+            "expires_at": api_key.expires_at.isoformat() if api_key.expires_at else None,
+            "api_key": raw_key
+        }
+    }), 201
+
+
+@admin_bp.post("/api/apikeys/<int:key_id>/revoke")
+def revoke_api_key(key_id):
+    try:
+        key = api_key_service.revoke_key(key_id)
+    except ValueError as error:
+        return _error_response(str(error), 404)
+    except Exception:
+        current_app.logger.exception("Error interno en /admin/api/apikeys/%s/revoke", key_id)
+        return _error_response("Error interno del servidor.", 500)
+
+    return jsonify({
+        "ok": True,
+        "data": {
+            "id": key.id,
+            "is_active": key.is_active,
+            "revoked_at": key.revoked_at.isoformat() if key.revoked_at else None
+        }
+    })
 
 
 @admin_bp.get("/api/users")

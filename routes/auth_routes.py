@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 
 from flask import Blueprint, current_app, jsonify, redirect, render_template, request, session, url_for
 
+from services.api_key_service import ApiKeyService
 from services.face_auth_service import FaceAuthService
 from services.plugin_security_service import PluginSecurityService
 from services.rate_limiter import InMemoryRateLimiter
@@ -14,6 +15,7 @@ face_auth_service = FaceAuthService(
     duplicate_face_threshold=float(os.getenv("DUPLICATE_FACE_THRESHOLD", "0.92"))
 )
 rate_limiter = InMemoryRateLimiter()
+api_key_service = ApiKeyService()
 
 
 def _error_response(message, status_code):
@@ -117,10 +119,12 @@ def _resolve_plugin_context():
 
 @auth_bp.get("/")
 def index():
-    # Protect direct access to root UI behind admin API-key login.
-    # Plugin popup flow keeps using signed token validation and does not require admin session.
     is_plugin_mode = request.args.get("plugin") == "1"
-    if not is_plugin_mode and session.get("admin_authenticated") is not True:
+
+    # Keep legacy UI only for plugin popup flow.
+    if not is_plugin_mode:
+        if session.get("admin_authenticated") is True:
+            return redirect(url_for("admin.users_panel"))
         return redirect(url_for("admin.login"))
 
     try:
@@ -160,13 +164,20 @@ def issue_plugin_token():
     except ValueError as error:
         return _error_response(str(error), 400)
 
-    clients = PluginSecurityService.parse_clients(current_app.config.get("PLUGIN_CLIENTS", ""))
-    if not clients:
-        return _error_response("No hay clientes de plugin configurados.", 500)
+    validated_key, validation_error = api_key_service.verify_key(
+        raw_key=api_key,
+        required_scopes=["plugin:token"],
+        client_id=client_id,
+        remote_ip=_remote_ip()
+    )
 
-    expected_key = clients.get(client_id)
-    if not expected_key or not hmac.compare_digest(expected_key, api_key):
-        return _error_response("Cliente no autorizado.", 401)
+    if validated_key is None:
+        # Backward compatibility path for old .env PLUGIN_CLIENTS.
+        clients = PluginSecurityService.parse_clients(current_app.config.get("PLUGIN_CLIENTS", ""))
+        expected_key = clients.get(client_id) if clients else None
+
+        if not expected_key or not hmac.compare_digest(expected_key, api_key):
+            return _error_response(validation_error or "Cliente no autorizado.", 401)
 
     token = _plugin_security_service().issue_launch_token(client_id=client_id, origin=origin)
 

@@ -122,7 +122,7 @@ Aplicacion:
 
 El sistema incluye un panel para gestionar usuarios con CRUD (crear, listar, editar, eliminar), protegido por login de API key en sesion.
 
-### 1. Configurar API key de administrador
+### 1. Primer acceso (bootstrap)
 
 En tu `.env` agrega:
 
@@ -130,11 +130,63 @@ En tu `.env` agrega:
 ADMIN_PANEL_API_KEY=tu-api-key-admin-segura
 ```
 
-### 2. Abrir login de panel
+Esta key funciona como respaldo para el primer acceso.
+
+### 2. Crear API keys seguras desde backend
+
+Una vez dentro del panel, crea API keys desde backend usando:
+
+- `POST /admin/api/apikeys`
+
+Payload ejemplo (misma key para admin y plugin):
+
+```json
+{
+   "name": "admin-plugin-main",
+   "scopes": ["admin:login", "plugin:token"],
+   "client_id": "erp_portal",
+   "expires_in_days": 365
+}
+```
+
+La respuesta devuelve `api_key` una sola vez (guardala de forma segura).
+
+Scopes disponibles:
+
+- `admin:login` para entrar al panel `/admin/login`
+- `plugin:token` para consumir `/api/plugin/token`
+
+Endpoints de gestion:
+
+- `GET /admin/api/apikeys` lista metadata de keys (sin secreto).
+- `POST /admin/api/apikeys/<id>/revoke` revoca una key.
+
+### 2.1 Invalidar la API key bootstrap de `.env` (despues del primer uso)
+
+Recomendado: una vez creada al menos una API key administrada por backend, invalida la key legacy de entorno.
+
+Pasos:
+
+1. Crea una API key nueva con scope `admin:login`.
+2. Verifica que puedes entrar al panel con la nueva key.
+3. Edita `.env` y elimina `ADMIN_PANEL_API_KEY` o cambiala por un valor aleatorio no usado.
+4. Reinicia servicios para aplicar el cambio.
+
+Con Docker Compose:
+
+```bash
+docker compose --env-file .env up -d --force-recreate
+```
+
+Nota:
+
+- Mientras `ADMIN_PANEL_API_KEY` tenga un valor valido, el fallback legacy seguira aceptandolo.
+
+### 3. Abrir login de panel
 
 - http://127.0.0.1:5000/admin/login
 
-### 3. Funcionalidades del panel
+### 4. Funcionalidades del panel
 
 - Crear usuario: captura frame facial desde camara + nombre + documento.
 - Listar usuarios registrados.
@@ -155,13 +207,16 @@ Archivo SDK:
 
 Para evitar que cualquier aplicacion use el plugin, ahora el modo plugin exige token de lanzamiento firmado y con expiracion.
 
-Configura clientes autorizados en variables de entorno:
+Configura seguridad del plugin:
 
 ```env
 PLUGIN_SECURITY_ENABLED=1
 PLUGIN_TOKEN_TTL_SECONDS=120
+# Legado opcional (fallback):
 PLUGIN_CLIENTS=erp_portal:erp-secret-key
 ```
+
+Recomendado: usar API keys creadas por backend con scope `plugin:token` en lugar de `PLUGIN_CLIENTS`.
 
 Flujo seguro:
 

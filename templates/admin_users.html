@@ -105,8 +105,48 @@
       min-height: 22px;
     }
 
+    .full-span {
+      grid-column: 1 / -1;
+    }
+
+    .api-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .api-form {
+      display: grid;
+      gap: 8px;
+    }
+
+    .check-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 2px 0 8px;
+    }
+
+    .check-row label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.9rem;
+    }
+
+    .mono {
+      font-family: Menlo, Monaco, Consolas, monospace;
+      font-size: 0.85rem;
+      word-break: break-all;
+    }
+
     @media (max-width: 980px) {
       .admin-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .api-grid {
         grid-template-columns: 1fr;
       }
     }
@@ -181,6 +221,53 @@
       </div>
 
       <canvas id="buffer" class="hidden"></canvas>
+    </section>
+
+    <section class="panel full-span">
+      <p class="eyebrow">Seguridad</p>
+      <h2 style="margin-top: 0;">API Keys</h2>
+      <p class="subtitle">Crea, lista y revoca API keys para panel admin y plugin.</p>
+
+      <div class="api-grid">
+        <form id="apiKeyForm" class="card api-form">
+          <label for="apiKeyName">Nombre</label>
+          <input id="apiKeyName" name="apiKeyName" required placeholder="admin-plugin-main">
+
+          <label for="apiKeyClientId">Client ID (opcional)</label>
+          <input id="apiKeyClientId" name="apiKeyClientId" placeholder="erp_portal">
+
+          <label for="apiKeyExpiresDays">Expira en dias (opcional)</label>
+          <input id="apiKeyExpiresDays" name="apiKeyExpiresDays" type="number" min="1" max="3650" placeholder="365">
+
+          <label>Scopes</label>
+          <div class="check-row">
+            <label><input id="scopeAdminLogin" type="checkbox" checked>admin:login</label>
+            <label><input id="scopePluginToken" type="checkbox" checked>plugin:token</label>
+          </div>
+
+          <button id="btnCreateApiKey" class="primary" type="submit">Crear API key</button>
+          <div id="apiKeyCreateResult" class="result">Completa el formulario para generar una key.</div>
+        </form>
+
+        <div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Nombre</th>
+                  <th>Scopes</th>
+                  <th>Client ID</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="apiKeysBody"></tbody>
+            </table>
+          </div>
+          <div id="apiKeysResult" class="result" style="margin-top: 10px;">Cargando API keys...</div>
+        </div>
+      </div>
     </section>
   </main>
 

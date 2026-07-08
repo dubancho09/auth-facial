@@ -49,3 +49,32 @@ class LoginHistory(db.Model):
     resultado = db.Column(db.Boolean)
 
     score = db.Column(db.Float)
+
+
+class ApiKey(db.Model):
+
+    __tablename__ = "api_keys"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    name = db.Column(db.String(120), nullable=False)
+
+    key_prefix = db.Column(db.String(32), unique=True, nullable=False, index=True)
+
+    key_hash = db.Column(db.String(64), unique=True, nullable=False)
+
+    scopes = db.Column(db.String(255), nullable=False)
+
+    client_id = db.Column(db.String(80), nullable=True)
+
+    is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
+
+    expires_at = db.Column(db.DateTime, nullable=True)
+
+    revoked_at = db.Column(db.DateTime, nullable=True)
+
+    last_used_at = db.Column(db.DateTime, nullable=True)
+
+    last_used_ip = db.Column(db.String(64), nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
