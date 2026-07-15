@@ -211,7 +211,8 @@ def create_user():
         result = face_auth_service.register_user(
             nombre=payload.get("nombre", ""),
             documento=payload.get("documento", ""),
-            frame_data=payload.get("frame", "")
+            frame_data=payload.get("frame", ""),
+            liveness_key=f"admin-register:{_remote_ip()}"
         )
     except ValueError as error:
         return _error_response(str(error), 400)

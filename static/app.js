@@ -21,6 +21,10 @@ let loopTimer = null;
 let requestInFlight = false;
 let rateLimitedUntil = 0;
 
+function isLivenessPendingError(message) {
+  return /verificacion de vida requerida|parpadea/i.test(message || "");
+}
+
 function notifyPluginHost(eventName, payload) {
   if (!pluginMode || !window.opener) {
     return;
@@ -188,7 +192,10 @@ registerForm.addEventListener("submit", (event) => {
       notifyPluginHost("register:success", data);
       btnStartRegister.disabled = false;
     },
-    (response) => response.status === 400
+    (response, body) => {
+      const err = body.error || body.data?.message || "";
+      return response.status === 400 && !isLivenessPendingError(err);
+    }
   );
 });
 

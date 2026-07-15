@@ -2,6 +2,7 @@ import base64
 import binascii
 import hashlib
 import re
+import time
 
 import cv2
 import numpy as np
@@ -20,6 +21,121 @@ class FaceAuthService:
         self.recognizer = FaceRecognizer()
         self.similarity_threshold = similarity_threshold
         self.duplicate_face_threshold = duplicate_face_threshold
+        self._liveness_states = {}
+
+    def _check_blink_liveness(self, image, liveness_key):
+        if not liveness_key:
+            return True
+
+        now = time.time()
+        state = self._liveness_states.get(liveness_key)
+
+        if state is None or now - state["updated_at"] > 20.0:
+            state = {
+                "open_reference": 0.0,
+                "phase": "collect_open",
+                "frame_count": 0,
+                "open_frames": 0,
+                "closed_frames": 0,
+                "reopen_frames": 0,
+                "movement_frames": 0,
+                "blink_confirmed": False,
+                "movement_confirmed": False,
+                "baseline_nose": None,
+                "smoothed_eye_score": None,
+                "updated_at": now
+            }
+            self._liveness_states[liveness_key] = state
+
+        metrics = self.recognizer.get_liveness_metrics(image)
+        eye_score = float(metrics["eye_score"])
+        nose = np.asarray(metrics["nose"], dtype=np.float32)
+        inter_eye_distance = float(metrics["inter_eye_distance"])
+
+        previous_smoothed = state["smoothed_eye_score"]
+        if previous_smoothed is None:
+            smoothed_eye_score = eye_score
+        else:
+            smoothed_eye_score = (previous_smoothed * 0.65) + (eye_score * 0.35)
+
+        state["smoothed_eye_score"] = smoothed_eye_score
+        state["frame_count"] += 1
+        state["updated_at"] = now
+
+        min_open_reference = 30.0
+        close_ratio = 0.66
+        reopen_ratio = 0.84
+        movement_ratio_threshold = 0.16
+        min_open_frames = 3
+        min_closed_frames = 2
+        min_reopen_frames = 2
+        min_movement_frames = 2
+        min_total_frames = 6
+
+        baseline_nose = state["baseline_nose"]
+        if baseline_nose is None:
+            state["baseline_nose"] = nose
+        else:
+            state["baseline_nose"] = (baseline_nose * 0.85) + (nose * 0.15)
+
+        if state["phase"] == "collect_open":
+            if smoothed_eye_score >= min_open_reference:
+                state["open_frames"] += 1
+                state["open_reference"] = max(state["open_reference"], smoothed_eye_score)
+
+            if state["open_frames"] >= min_open_frames:
+                state["phase"] = "wait_action"
+            return False
+
+        open_reference = max(state["open_reference"], min_open_reference)
+        close_threshold = open_reference * close_ratio
+        reopen_threshold = open_reference * reopen_ratio
+
+        movement_ratio = float(np.linalg.norm(nose - state["baseline_nose"]) / inter_eye_distance)
+        if movement_ratio >= movement_ratio_threshold:
+            state["movement_frames"] += 1
+        else:
+            state["movement_frames"] = max(0, state["movement_frames"] - 1)
+
+        if state["movement_frames"] >= min_movement_frames:
+            state["movement_confirmed"] = True
+
+        if state["phase"] == "wait_action":
+            if smoothed_eye_score <= close_threshold:
+                state["closed_frames"] += 1
+            else:
+                state["closed_frames"] = 0
+
+            if state["closed_frames"] >= min_closed_frames:
+                state["phase"] = "wait_reopen"
+
+            if (
+                state["movement_confirmed"]
+                and state["frame_count"] >= min_total_frames
+            ):
+                return True
+
+            return False
+
+        if state["phase"] == "wait_reopen":
+            if smoothed_eye_score >= reopen_threshold:
+                state["reopen_frames"] += 1
+            else:
+                state["reopen_frames"] = 0
+
+            if state["reopen_frames"] >= min_reopen_frames:
+                state["blink_confirmed"] = True
+
+            if (state["blink_confirmed"] or state["movement_confirmed"]) and state["frame_count"] >= min_total_frames:
+                return True
+
+            return False
+
+        return False
+
+    def _clear_liveness_state(self, liveness_key):
+        if liveness_key:
+            self._liveness_states.pop(liveness_key, None)
 
     @staticmethod
     def decode_frame(data_url):
@@ -74,7 +190,7 @@ class FaceAuthService:
         emb = np.frombuffer(blob, dtype=np.float32)
         return emb
 
-    def register_user(self, nombre, documento, frame_data):
+    def register_user(self, nombre, documento, frame_data, liveness_key=None):
         if not nombre or not documento:
             raise ValueError("Nombre y documento son obligatorios.")
 
@@ -92,6 +208,9 @@ class FaceAuthService:
             raise ValueError("Ya existe un usuario con ese documento.")
 
         image = self.decode_frame(frame_data)
+
+        if not self._check_blink_liveness(image, liveness_key):
+            raise ValueError("Verificacion de vida pendiente: parpadea o mueve ligeramente el rostro frente a la camara.")
 
         is_valid_face, warnings = self.recognizer.validate_unobstructed_face(image)
         if not is_valid_face:
@@ -111,12 +230,21 @@ class FaceAuthService:
 
         # Defend against near-duplicate embeddings caused by small camera/noise changes.
         existing_users = User.query.with_entities(User.id, User.embedding).all()
+        best_duplicate_score = -1.0
+
         for _, stored_blob in existing_users:
             stored_embedding = self._normalize_embedding(self.deserialize_embedding(stored_blob))
             score = float(np.dot(normalized_probe, stored_embedding))
+            best_duplicate_score = max(best_duplicate_score, score)
 
             if score >= self.duplicate_face_threshold:
                 raise ValueError("Este rostro ya está registrado en el sistema.")
+
+        # Additional safeguard: if the face is clearly recognized as existing,
+        # block registration even when the strict duplicate threshold is not met.
+        soft_duplicate_threshold = max(self.similarity_threshold + 0.15, 0.60)
+        if best_duplicate_score >= soft_duplicate_threshold:
+            raise ValueError("Este rostro ya está registrado en el sistema.")
 
         user = User(
             nombre=nombre,
@@ -141,6 +269,8 @@ class FaceAuthService:
 
             raise
 
+        self._clear_liveness_state(liveness_key)
+
         return {
             "id": user.id,
             "nombre": user.nombre,
@@ -148,8 +278,12 @@ class FaceAuthService:
             "face_hash": user.face_hash
         }
 
-    def authenticate(self, frame_data):
+    def authenticate(self, frame_data, liveness_key=None):
         image = self.decode_frame(frame_data)
+
+        if not self._check_blink_liveness(image, liveness_key):
+            raise ValueError("Verificacion de vida pendiente: parpadea o mueve ligeramente el rostro frente a la camara.")
+
         probe_embedding = self._normalize_embedding(self.recognizer.get_embedding(image))
 
         users = User.query.all()
@@ -184,6 +318,8 @@ class FaceAuthService:
                 "threshold": self.similarity_threshold,
                 "message": "Rostro no reconocido."
             }
+
+        self._clear_liveness_state(liveness_key)
 
         return {
             "authenticated": True,

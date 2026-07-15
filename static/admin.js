@@ -20,10 +20,16 @@ const scopeAdminLogin = document.getElementById("scopeAdminLogin");
 const scopePluginToken = document.getElementById("scopePluginToken");
 
 let stream = null;
+let createLoopTimer = null;
+let createRequestInFlight = false;
 
 function setResult(message, kind = "") {
   usersResult.textContent = message;
   usersResult.className = `result ${kind}`.trim();
+}
+
+function isLivenessPendingError(message) {
+  return /verificacion de vida requerida|parpadea|mueve ligeramente/i.test(message || "");
 }
 
 function escapeHtml(value) {
@@ -166,6 +172,47 @@ async function createUser(nombre, documento) {
   }
 
   return body.data;
+}
+
+function stopCreateLoop() {
+  if (createLoopTimer) {
+    clearInterval(createLoopTimer);
+    createLoopTimer = null;
+  }
+}
+
+function startCreateLoop(nombre, documento) {
+  stopCreateLoop();
+  setResult("Verificacion de vida: parpadea o mueve ligeramente el rostro frente a la camara.", "");
+
+  createLoopTimer = setInterval(async () => {
+    if (createRequestInFlight || !stream) {
+      return;
+    }
+
+    createRequestInFlight = true;
+
+    try {
+      const created = await createUser(nombre, documento);
+      stopCreateLoop();
+      setResult(`Usuario creado: ${created.nombre} (${created.documento})`, "ok");
+      createUserForm.reset();
+      await loadUsers();
+      btnCreate.disabled = false;
+      return;
+    } catch (error) {
+      if (!isLivenessPendingError(error.message)) {
+        stopCreateLoop();
+        setResult(error.message, "bad");
+        btnCreate.disabled = false;
+        return;
+      }
+
+      setResult("Verificacion de vida pendiente: parpadea o mueve ligeramente el rostro.", "");
+    } finally {
+      createRequestInFlight = false;
+    }
+  }, 900);
 }
 
 function setAuthResult(message, kind = "") {
@@ -322,18 +369,7 @@ createUserForm.addEventListener("submit", async (event) => {
   }
 
   btnCreate.disabled = true;
-  setResult("Creando usuario biometrico...", "");
-
-  try {
-    const created = await createUser(nombre, documento);
-    setResult(`Usuario creado: ${created.nombre} (${created.documento})`, "ok");
-    createUserForm.reset();
-    await loadUsers();
-  } catch (error) {
-    setResult(error.message, "bad");
-  } finally {
-    btnCreate.disabled = false;
-  }
+  startCreateLoop(nombre, documento);
 });
 
 btnToggleCamera.addEventListener("click", async () => {
@@ -512,5 +548,6 @@ apiKeysBody.addEventListener("click", async (event) => {
 })();
 
 window.addEventListener("beforeunload", () => {
+  stopCreateLoop();
   stopCamera();
 });

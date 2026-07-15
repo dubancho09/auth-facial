@@ -213,7 +213,8 @@ def stream_register():
         result = face_auth_service.register_user(
             nombre=payload.get("nombre", ""),
             documento=payload.get("documento", ""),
-            frame_data=payload.get("frame", "")
+            frame_data=payload.get("frame", ""),
+            liveness_key=f"register:{_remote_ip()}"
         )
         return jsonify({"ok": True, "data": result}), 201
     except ValueError as error:
@@ -241,7 +242,8 @@ def stream_authenticate():
 
     try:
         result = face_auth_service.authenticate(
-            frame_data=payload.get("frame", "")
+            frame_data=payload.get("frame", ""),
+            liveness_key=f"authenticate:{_remote_ip()}"
         )
 
         status_code = 200 if result.get("authenticated") else 401
