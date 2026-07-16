@@ -60,6 +60,29 @@ Detener y borrar volumen de PostgreSQL:
 docker compose down -v
 ```
 
+## Opcion A.1: Docker Compose para produccion (sin base de datos local)
+
+Usa este modo cuando la base de datos PostgreSQL esta fuera de Compose (por ejemplo, RDS, Cloud SQL o un servidor dedicado).
+
+1. Asegura en tu `.env` las variables de conexion a la base externa (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` o `DATABASE_URL`).
+2. Levanta solo la app web:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+```
+
+Ver logs:
+
+```bash
+docker compose -f docker-compose.prod.yml logs -f web
+```
+
+Detener:
+
+```bash
+docker compose -f docker-compose.prod.yml down
+```
+
 ## Opcion B: Ejecutar local con entorno virtual + PostgreSQL
 
 ### 1. Entrar al proyecto
