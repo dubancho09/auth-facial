@@ -22,6 +22,8 @@ const scopePluginToken = document.getElementById("scopePluginToken");
 let stream = null;
 let createLoopTimer = null;
 let createRequestInFlight = false;
+let authLoopTimer = null;
+let authRequestInFlight = false;
 
 function setResult(message, kind = "") {
   usersResult.textContent = message;
@@ -232,11 +234,66 @@ async function authenticateCurrentFrame() {
   });
 
   const body = await response.json();
-  if (!response.ok || !body.data) {
+  if (response.status === 400) {
+    throw new Error(body.error || "No se pudo autenticar en este momento.");
+  }
+
+  if (!body.data) {
     throw new Error(body.error || "No se pudo autenticar en este momento.");
   }
 
   return body.data;
+}
+
+function stopAuthLoop() {
+  if (authLoopTimer) {
+    clearInterval(authLoopTimer);
+    authLoopTimer = null;
+  }
+}
+
+function startAuthLoop() {
+  stopAuthLoop();
+  setAuthResult("Verificacion de vida: parpadea o mueve ligeramente el rostro frente a la camara.", "");
+
+  authLoopTimer = setInterval(async () => {
+    if (authRequestInFlight || !stream) {
+      return;
+    }
+
+    authRequestInFlight = true;
+
+    try {
+      const result = await authenticateCurrentFrame();
+
+      if (!result.authenticated) {
+        stopAuthLoop();
+        setAuthResult(
+          `${result.message || "Rostro no reconocido."} (score: ${result.score ?? 0}, umbral: ${result.threshold ?? "n/a"})`,
+          "bad"
+        );
+        btnAuthenticate.disabled = false;
+        return;
+      }
+
+      stopAuthLoop();
+      setAuthResult(
+        `Autenticado: ${result.user?.nombre || "Usuario"} (${result.user?.documento || "-"}) | score: ${result.score}`,
+        "ok"
+      );
+      btnAuthenticate.disabled = false;
+    } catch (error) {
+      if (isLivenessPendingError(error.message)) {
+        setAuthResult("Verificacion de vida pendiente: parpadea o mueve ligeramente el rostro.", "");
+      } else {
+        stopAuthLoop();
+        setAuthResult(error.message, "bad");
+        btnAuthenticate.disabled = false;
+      }
+    } finally {
+      authRequestInFlight = false;
+    }
+  }, 900);
 }
 
 async function updateUser(id, nombre, documento) {
@@ -374,6 +431,8 @@ createUserForm.addEventListener("submit", async (event) => {
 
 btnToggleCamera.addEventListener("click", async () => {
   if (stream) {
+    stopCreateLoop();
+    stopAuthLoop();
     stopCamera();
     setResult("Camara apagada manualmente.", "");
     return;
@@ -395,27 +454,7 @@ btnAuthenticate.addEventListener("click", async () => {
   }
 
   btnAuthenticate.disabled = true;
-  setAuthResult("Autenticando rostro...", "");
-
-  try {
-    const result = await authenticateCurrentFrame();
-    if (!result.authenticated) {
-      setAuthResult(
-        `${result.message || "Rostro no reconocido."} (score: ${result.score ?? 0}, umbral: ${result.threshold ?? "n/a"})`,
-        "bad"
-      );
-      return;
-    }
-
-    setAuthResult(
-      `Autenticado: ${result.user?.nombre || "Usuario"} (${result.user?.documento || "-"}) | score: ${result.score}`,
-      "ok"
-    );
-  } catch (error) {
-    setAuthResult(error.message, "bad");
-  } finally {
-    btnAuthenticate.disabled = !stream;
-  }
+  startAuthLoop();
 });
 
 usersBody.addEventListener("click", async (event) => {
