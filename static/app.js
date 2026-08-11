@@ -12,7 +12,7 @@ const btnStartAuth = document.getElementById("btnStartAuth");
 const btnStartRegister = document.getElementById("btnStartRegister");
 
 const pluginConfig = window.__FACE_PLUGIN__ || {};
-const pluginMode = pluginConfig.pluginMode === true;
+const pluginMode = pluginConfig.pluginMode === true || pluginConfig.pluginMode === "true";
 const openerOrigin = pluginConfig.openerOrigin || "*";
 
 let stream = null;
@@ -38,6 +38,11 @@ function notifyPluginHost(eventName, payload) {
     },
     openerOrigin
   );
+}
+
+function closePluginWindow() {
+  // In plugin popup flow this should be allowed because the window was opened via window.open.
+  window.close();
 }
 
 function setResult(message, kind = "") {
@@ -206,16 +211,22 @@ btnStartAuth.addEventListener("click", () => {
     "/api/stream/authenticate",
     (frame) => ({ frame }),
     (data) => {
-      const user = data.user;
+      const user = data?.user || {};
       setResult(
-        `Autenticación correcta\nNombre: ${user.nombre}\nDocumento: ${user.documento}\nHash: ${user.face_hash}\nScore: ${data.score} (umbral ${data.threshold})`,
+        `Autenticación correcta\nNombre: ${user.nombre || "-"}\nDocumento: ${user.documento || "-"}\nHash: ${user.face_hash || "-"}\nScore: ${data.score} (umbral ${data.threshold})`,
         "ok"
       );
-      notifyPluginHost("auth:success", data);
+
+      try {
+        notifyPluginHost("auth:success", data);
+      } catch (error) {
+        // If postMessage target origin is invalid/mismatched, still close popup after success.
+        console.error("No se pudo notificar a la ventana padre:", error);
+      }
 
       if (pluginMode) {
         setTimeout(() => {
-          window.close();
+          closePluginWindow();
         }, 800);
       }
 
