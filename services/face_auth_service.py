@@ -3,6 +3,8 @@ import binascii
 import hashlib
 import re
 import time
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 import cv2
 import numpy as np
@@ -16,6 +18,7 @@ from services.recognizer import FaceRecognizer
 class FaceAuthService:
 
     DOCUMENT_PATTERN = re.compile(r"^[A-Za-z0-9._-]{4,30}$")
+    BOGOTA_TZ = ZoneInfo("America/Bogota")
 
     def __init__(self, similarity_threshold=0.45, duplicate_face_threshold=0.92):
         self.recognizer = FaceRecognizer()
@@ -190,6 +193,17 @@ class FaceAuthService:
         emb = np.frombuffer(blob, dtype=np.float32)
         return emb
 
+    @classmethod
+    def _event_time_payload(cls):
+        now_utc = datetime.now(timezone.utc)
+        now_bogota = now_utc.astimezone(cls.BOGOTA_TZ)
+
+        return {
+            "event_time_bogota": now_bogota.isoformat(timespec="milliseconds"),
+            "event_time_utc": now_utc.isoformat(timespec="milliseconds"),
+            "event_epoch_ms": int(now_utc.timestamp() * 1000)
+        }
+
     def register_user(self, nombre, documento, frame_data, liveness_key=None):
         if not nombre or not documento:
             raise ValueError("Nombre y documento son obligatorios.")
@@ -271,11 +285,16 @@ class FaceAuthService:
 
         self._clear_liveness_state(liveness_key)
 
+        event_time = self._event_time_payload()
+
         return {
             "id": user.id,
             "nombre": user.nombre,
             "documento": user.documento,
-            "face_hash": user.face_hash
+            "face_hash": user.face_hash,
+            "registered_at_bogota": event_time["event_time_bogota"],
+            "registered_at_utc": event_time["event_time_utc"],
+            "registered_at_epoch_ms": event_time["event_epoch_ms"]
         }
 
     def authenticate(self, frame_data, liveness_key=None):
@@ -321,15 +340,23 @@ class FaceAuthService:
 
         self._clear_liveness_state(liveness_key)
 
+        event_time = self._event_time_payload()
+
         return {
             "authenticated": True,
             "score": round(best_score, 4),
             "threshold": self.similarity_threshold,
+            "authenticated_at_bogota": event_time["event_time_bogota"],
+            "authenticated_at_utc": event_time["event_time_utc"],
+            "authenticated_at_epoch_ms": event_time["event_epoch_ms"],
             "user": {
                 "id": best_user.id,
                 "nombre": best_user.nombre,
                 "documento": best_user.documento,
-                "face_hash": best_user.face_hash
+                "face_hash": best_user.face_hash,
+                "authenticated_at_bogota": event_time["event_time_bogota"],
+                "authenticated_at_utc": event_time["event_time_utc"],
+                "authenticated_at_epoch_ms": event_time["event_epoch_ms"]
             }
         }
 
