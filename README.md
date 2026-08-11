@@ -356,6 +356,247 @@ Como funciona:
 4. El plugin envia el resultado a la ventana padre con postMessage.
 5. El SDK resuelve la promesa con los datos del usuario autenticado.
 
+## Integracion con Spring Boot MVC + Thymeleaf
+
+Esta seccion documenta una implementacion de referencia para integrar el plugin facial en una app Java con Spring Boot MVC y Thymeleaf.
+
+Arquitectura recomendada:
+
+1. Tu frontend (Thymeleaf) nunca crea ni firma tokens.
+2. Tu backend Spring solicita el launch token al servidor del plugin.
+3. Tu frontend llama a un endpoint interno de Spring para obtener ese token.
+4. Tu frontend abre el popup con FaceAuthPlugin y recibe el resultado de autenticacion.
+
+### 1) Configuracion en application.yml
+
+```yaml
+face-plugin:
+   base-url: http://127.0.0.1:5000
+   token-endpoint: /api/plugin/token
+   client-id: erp_portal
+   api-key: ${FACE_PLUGIN_API_KEY}
+   opener-origin: ${APP_PUBLIC_ORIGIN:http://localhost:8080}
+```
+
+### 2) Properties class
+
+```java
+package com.example.demo.config;
+
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+@ConfigurationProperties(prefix = "face-plugin")
+public class FacePluginProperties {
+      private String baseUrl;
+      private String tokenEndpoint;
+      private String clientId;
+      private String apiKey;
+      private String openerOrigin;
+
+      public String getBaseUrl() { return baseUrl; }
+      public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
+
+      public String getTokenEndpoint() { return tokenEndpoint; }
+      public void setTokenEndpoint(String tokenEndpoint) { this.tokenEndpoint = tokenEndpoint; }
+
+      public String getClientId() { return clientId; }
+      public void setClientId(String clientId) { this.clientId = clientId; }
+
+      public String getApiKey() { return apiKey; }
+      public void setApiKey(String apiKey) { this.apiKey = apiKey; }
+
+      public String getOpenerOrigin() { return openerOrigin; }
+      public void setOpenerOrigin(String openerOrigin) { this.openerOrigin = openerOrigin; }
+}
+```
+
+Registra la clase en tu aplicacion:
+
+```java
+@SpringBootApplication
+@EnableConfigurationProperties(FacePluginProperties.class)
+public class DemoApplication {
+      public static void main(String[] args) {
+            SpringApplication.run(DemoApplication.class, args);
+      }
+}
+```
+
+### 3) Cliente de infraestructura para pedir launch token
+
+```java
+package com.example.demo.plugin;
+
+import com.example.demo.config.FacePluginProperties;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient;
+
+import java.util.Map;
+
+@Component
+public class FacePluginTokenClient {
+
+      private final FacePluginProperties props;
+      private final RestClient restClient;
+
+      public FacePluginTokenClient(FacePluginProperties props, RestClient.Builder builder) {
+            this.props = props;
+            this.restClient = builder.baseUrl(props.getBaseUrl()).build();
+      }
+
+      public String issueLaunchToken() {
+            Map<String, Object> body = Map.of(
+                  "client_id", props.getClientId(),
+                  "origin", props.getOpenerOrigin()
+            );
+
+            Map<?, ?> response = restClient.post()
+                  .uri(props.getTokenEndpoint())
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .header("X-Plugin-Api-Key", props.getApiKey())
+                  .body(body)
+                  .retrieve()
+                  .body(Map.class);
+
+            if (response == null || !Boolean.TRUE.equals(response.get("ok"))) {
+                  throw new IllegalStateException("No se pudo obtener token de lanzamiento");
+            }
+
+            Map<?, ?> data = (Map<?, ?>) response.get("data");
+            if (data == null || data.get("token") == null) {
+                  throw new IllegalStateException("Respuesta invalida al solicitar token");
+            }
+
+            return data.get("token").toString();
+      }
+}
+```
+
+### 4) Controller MVC + endpoint interno para token
+
+```java
+package com.example.demo.web;
+
+import com.example.demo.plugin.FacePluginTokenClient;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.ResponseBody;
+
+import java.util.Map;
+
+@Controller
+public class AttendanceController {
+
+      private final FacePluginTokenClient tokenClient;
+
+      public AttendanceController(FacePluginTokenClient tokenClient) {
+            this.tokenClient = tokenClient;
+      }
+
+      @GetMapping("/asistencia")
+      public String attendancePage() {
+            return "attendance";
+      }
+
+      @PostMapping("/asistencia/plugin-launch-token")
+      @ResponseBody
+      public ResponseEntity<?> launchToken() {
+            String token = tokenClient.issueLaunchToken();
+            return ResponseEntity.ok(Map.of("token", token));
+      }
+}
+```
+
+### 5) Vista Thymeleaf (attendance.html)
+
+```html
+<!doctype html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Registro de Asistencia</title>
+</head>
+<body>
+   <h1>Registrar Asistencia</h1>
+
+   <button id="btn_reg" type="button">Autenticar con rostro</button>
+   <pre id="auth_result"></pre>
+
+   <script src="http://127.0.0.1:5000/static/face-auth-plugin.js?v=20260811"></script>
+   <script th:src="@{/js/attendance-plugin.js}"></script>
+</body>
+</html>
+```
+
+### 6) JavaScript del cliente (attendance-plugin.js)
+
+```js
+const btnReg = document.getElementById("btn_reg");
+const resultBox = document.getElementById("auth_result");
+
+btnReg.addEventListener("click", async () => {
+   const sdk = window.FaceAuthPlugin;
+   let preopenedPopup = null;
+
+   try {
+      if (!sdk || typeof sdk.open !== "function") {
+         throw new Error("SDK FaceAuthPlugin no disponible");
+      }
+
+      if (typeof sdk.preopenPopup === "function") {
+         preopenedPopup = sdk.preopenPopup({ width: 920, height: 760 });
+      }
+
+      const tokenResp = await fetch("/asistencia/plugin-launch-token", {
+         method: "POST",
+         headers: { "Content-Type": "application/json" }
+      });
+
+      if (!tokenResp.ok) {
+         throw new Error("No se pudo obtener launchToken");
+      }
+
+      const tokenBody = await tokenResp.json();
+      const launchToken = tokenBody.token;
+
+      const pluginUrl = "http://127.0.0.1:5000/";
+      const result = await sdk.open({
+         pluginUrl,
+         launchToken,
+         expectedOrigin: new URL(pluginUrl).origin,
+         preopenedPopup,
+         closeGraceMs: 2000,
+         debug: true
+      });
+
+      if (result?.cancelled) {
+         resultBox.textContent = "Flujo cancelado por el usuario.";
+         return;
+      }
+
+      resultBox.textContent = JSON.stringify(result.user, null, 2);
+   } catch (error) {
+      if (preopenedPopup && !preopenedPopup.closed) {
+         try { preopenedPopup.close(); } catch (_) {}
+      }
+
+      resultBox.textContent = `Error: ${error.message || error}`;
+   }
+});
+```
+
+### 7) Recomendaciones operativas
+
+1. No hardcodear launchToken ni API keys en frontend.
+2. Siempre pedir launchToken a Spring en cada click.
+3. Definir APP_PUBLIC_ORIGIN con el dominio real de tu app.
+4. Mantener versionado del SDK en la URL para evitar cache viejo.
+5. Si el navegador abre pestaña en lugar de popup, la autenticacion igual debe resolverse y cerrar al exito.
+
 ## Solucion de problemas
 
 ### command not found: python
