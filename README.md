@@ -278,15 +278,65 @@ Luego, en frontend, abres el popup con ese token:
 
 <script>
    document.getElementById("btnFaceLogin").addEventListener("click", async () => {
+      let preopenedPopup = null;
+
       try {
+         // Preabre popup en el click del usuario para evitar que el navegador lo abra como pestaña.
+         preopenedPopup = window.FaceAuthPlugin.preopenPopup({
+            width: 920,
+            height: 760
+         });
+
          // launchToken llega desde tu backend (nunca hardcodear api keys en frontend)
          const launchToken = await fetch("/api/mi-backend/plugin-launch-token").then(r => r.text());
 
          const result = await window.FaceAuthPlugin.open({
             pluginUrl: "http://127.0.0.1:5000/",
             launchToken,
-            expectedOrigin: "http://127.0.0.1:5000"
+            expectedOrigin: "http://127.0.0.1:5000",
+            preopenedPopup,
+            debug: true
          });
+
+         console.log("Usuario autenticado:", result.user);
+      } catch (error) {
+         if (preopenedPopup && !preopenedPopup.closed) {
+            preopenedPopup.close();
+         }
+
+         console.error("No se pudo autenticar:", error.message);
+      }
+   });
+</script>
+```
+
+### Integracion embebida (dentro de tu pantalla)
+
+Si quieres abrir el flujo facial dentro de la misma pantalla (por ejemplo en la vista de registrar asistencia), usa `mode: "embed"` y un contenedor:
+
+```html
+<script src="http://127.0.0.1:5000/static/face-auth-plugin.js"></script>
+<button id="btnFaceLogin">Registrar asistencia</button>
+<div id="faceAuthContainer"></div>
+
+<script>
+   document.getElementById("btnFaceLogin").addEventListener("click", async () => {
+      try {
+         const launchToken = await fetch("/api/mi-backend/plugin-launch-token").then(r => r.text());
+
+         const result = await window.FaceAuthPlugin.open({
+            pluginUrl: "http://127.0.0.1:5000/",
+            launchToken,
+            expectedOrigin: "http://127.0.0.1:5000",
+            mode: "embed",
+            container: "#faceAuthContainer",
+            height: 760
+         });
+
+         if (result && result.cancelled) {
+            console.log("Usuario cerro el flujo facial.");
+            return;
+         }
 
          console.log("Usuario autenticado:", result.user);
       } catch (error) {
@@ -295,6 +345,8 @@ Luego, en frontend, abres el popup con ese token:
    });
 </script>
 ```
+
+Nota: al cerrar manualmente el flujo, el SDK ahora devuelve `{ cancelled: true }` por defecto en lugar de lanzar error. Si prefieres comportamiento estricto, usa `rejectOnClose: true`.
 
 Como funciona:
 

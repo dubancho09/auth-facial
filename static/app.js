@@ -14,6 +14,7 @@ const btnStartRegister = document.getElementById("btnStartRegister");
 const pluginConfig = window.__FACE_PLUGIN__ || {};
 const pluginMode = pluginConfig.pluginMode === true || pluginConfig.pluginMode === "true";
 const openerOrigin = pluginConfig.openerOrigin || "*";
+const pluginQueryMode = new URLSearchParams(window.location.search).get("plugin") === "1";
 
 let stream = null;
 let activeMode = "register";
@@ -26,23 +27,64 @@ function isLivenessPendingError(message) {
 }
 
 function notifyPluginHost(eventName, payload) {
-  if (!pluginMode || !window.opener) {
+  if (!isPluginFlow()) {
     return;
   }
 
-  window.opener.postMessage(
-    {
-      source: "face-auth-plugin",
-      event: eventName,
-      payload
-    },
-    openerOrigin
-  );
+  const hostWindow = window.opener || (window.parent !== window ? window.parent : null);
+
+  if (!hostWindow) {
+    return;
+  }
+
+  const message = {
+    source: "face-auth-plugin",
+    event: eventName,
+    payload
+  };
+
+  try {
+    hostWindow.postMessage(message, openerOrigin);
+  } catch (error) {
+    // If token origin and real opener origin differ, fallback to wildcard target.
+    hostWindow.postMessage(message, "*");
+  }
+}
+
+function isPluginFlow() {
+  return pluginMode || pluginQueryMode || !!window.opener || window.parent !== window;
 }
 
 function closePluginWindow() {
-  // In plugin popup flow this should be allowed because the window was opened via window.open.
+  // First attempt: standard close for script-opened popup/tab.
   window.close();
+
+  // Second attempt: some browsers only allow close after self-target open.
+  setTimeout(() => {
+    if (window.closed) {
+      return;
+    }
+
+    try {
+      window.open("", "_self");
+      window.close();
+    } catch (error) {
+      console.error("No se pudo ejecutar cierre forzado del plugin:", error);
+    }
+  }, 120);
+
+  // Final fallback: hide sensitive content even if browser blocks close.
+  setTimeout(() => {
+    if (window.closed) {
+      return;
+    }
+
+    try {
+      window.location.replace("about:blank#face-plugin-closed");
+    } catch (error) {
+      console.error("No se pudo redirigir la pestaña de plugin:", error);
+    }
+  }, 260);
 }
 
 function setResult(message, kind = "") {
@@ -224,7 +266,7 @@ btnStartAuth.addEventListener("click", () => {
         console.error("No se pudo notificar a la ventana padre:", error);
       }
 
-      if (pluginMode) {
+      if (isPluginFlow()) {
         setTimeout(() => {
           closePluginWindow();
         }, 800);
