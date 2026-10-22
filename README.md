@@ -1,4 +1,4 @@
-# OCR - Sistema de Registro y Autenticacion Facial
+# Sistema de Registro y Autenticacion Facial
 
 Este proyecto usa Flask + InsightFace para registrar usuarios y autenticarlos por rostro desde streaming de camara.
 
